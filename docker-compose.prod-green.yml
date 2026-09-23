@@ -1,0 +1,278 @@
+# SentinelCV Green Environment Deployment Configuration
+# Used during blue-green deployments
+# This is an exact copy of docker-compose.prod.yml but on different ports
+# for parallel testing before traffic switch
+
+services:
+  # PostgreSQL Database (Green - separate from Blue)
+  postgres-green:
+    image: pgvector/pgvector:pg16
+    container_name: sentinelcv_postgres_green
+    environment:
+      POSTGRES_DB: ${DB_NAME:-sentinelcv}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_INITDB_ARGS: "-c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all -c pg_stat_statements.max=10000 -c max_parallel_workers_maintenance=4"
+    volumes:
+      - postgres_green_data:/var/lib/postgresql/data
+      - ./scripts/init_pgvector.sql:/docker-entrypoint-initdb.d/01-pgvector.sql
+    ports:
+      - "5433:5432"  # Different port from blue (5432)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sentinelcv_green
+    restart: unless-stopped
+
+  # Redis Cache (Green)
+  redis-green:
+    image: redis:7-alpine
+    container_name: sentinelcv_redis_green
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme}
+    volumes:
+      - redis_green_data:/data
+    ports:
+      - "6380:6379"  # Different port from blue (6379)
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sentinelcv_green
+    restart: unless-stopped
+
+  # FastAPI Backend (Green)
+  backend-green:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sentinelcv_backend_green
+    environment:
+      SENTINELCV_ENV: ${SENTINELCV_ENV:-production}
+      # Database
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-changeme}@postgres-green:5432/${DB_NAME:-sentinelcv}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+      DB_POOL_RECYCLE: ${DB_POOL_RECYCLE:-3600}
+      DB_POOL_PRE_PING: ${DB_POOL_PRE_PING:-true}
+      DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT:-30}
+      
+      # Redis
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis-green:6379/0
+      VIDEO_JOB_QUEUE_MODE: ${VIDEO_JOB_QUEUE_MODE:-redis}
+      SYNTHETIC_JOB_QUEUE_MODE: ${SYNTHETIC_JOB_QUEUE_MODE:-redis}
+      TEMPORAL_JOB_QUEUE_MODE: ${TEMPORAL_JOB_QUEUE_MODE:-redis}
+      AUTO_ENSURE_PGVECTOR_FACE_INDEX: ${AUTO_ENSURE_PGVECTOR_FACE_INDEX:-1}
+      CACHE_TTL: ${CACHE_TTL:-3600}
+      
+      # Core
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DEBUG: ${DEBUG:-false}
+      APP_NAME: SentinelCV
+      
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-changeme_with_strong_key_in_production}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-changeme_internal_service_key}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRE_HOURS: ${JWT_EXPIRE_HOURS:-24}
+      BCRYPT_COST_FACTOR: ${BCRYPT_COST_FACTOR:-10}
+      
+      # AI Services
+      AI_SERVICE_URL: http://ai-service-green:8001
+      YOLO_MODEL_PATH: ${YOLO_MODEL_PATH:-/models/yolov8n.pt}
+      YOLO_CONFIDENCE_THRESHOLD: ${YOLO_CONFIDENCE_THRESHOLD:-0.5}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-32}
+      LIVENESS_CONFIDENCE_THRESHOLD: ${LIVENESS_CONFIDENCE_THRESHOLD:-0.65}
+      PGVECTOR_INDEX_TYPE: ${PGVECTOR_INDEX_TYPE:-hnsw}
+      PGVECTOR_IVFFLAT_PROBES: ${PGVECTOR_IVFFLAT_PROBES:-10}
+      PGVECTOR_HNSW_EF_SEARCH: ${PGVECTOR_HNSW_EF_SEARCH:-64}
+      PGVECTOR_CANDIDATE_LIMIT: ${PGVECTOR_CANDIDATE_LIMIT:-300}
+      
+      # CORS & API
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://sentinelcv.com}
+      CORS_CREDENTIALS: ${CORS_CREDENTIALS:-true}
+      FORCE_HTTPS: ${FORCE_HTTPS:-true}
+      SECURE_COOKIES: ${SECURE_COOKIES:-true}
+      
+      # Frontend API
+      FRONTEND_URL: ${FRONTEND_URL:-https://sentinelcv.com}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+      REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-sentinelcv_refresh_token}
+      REFRESH_COOKIE_DOMAIN: ${REFRESH_COOKIE_DOMAIN:-}
+      REFRESH_COOKIE_PATH: ${REFRESH_COOKIE_PATH:-/api/v1/auth}
+      REFRESH_COOKIE_SAMESITE: ${REFRESH_COOKIE_SAMESITE:-lax}
+      REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-true}
+      
+    depends_on:
+      postgres-green:
+        condition: service_healthy
+      redis-green:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - ./data/face_images:/app/data/face_images
+      - ./data/models:/models
+      - ./logs:/app/logs
+    ports:
+      - "8001:8000"  # Different port from blue (8000)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sentinelcv_green
+    restart: unless-stopped
+
+  queue-worker-green:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sentinelcv_queue_worker_green
+    command:
+      - python
+      - scripts/advanced_job_worker.py
+      - --job-type
+      - all
+      - --poll-interval
+      - "1"
+      - --pop-timeout
+      - "5"
+    environment:
+      SENTINELCV_ENV: ${SENTINELCV_ENV:-production}
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-changeme}@postgres-green:5432/${DB_NAME:-sentinelcv}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis-green:6379/0
+      AI_SERVICE_URL: http://ai-service-green:8001
+      VIDEO_JOB_QUEUE_MODE: ${VIDEO_JOB_QUEUE_MODE:-redis}
+      SYNTHETIC_JOB_QUEUE_MODE: ${SYNTHETIC_JOB_QUEUE_MODE:-redis}
+      TEMPORAL_JOB_QUEUE_MODE: ${TEMPORAL_JOB_QUEUE_MODE:-redis}
+      AUTO_ENSURE_PGVECTOR_FACE_INDEX: ${AUTO_ENSURE_PGVECTOR_FACE_INDEX:-1}
+    depends_on:
+      postgres-green:
+        condition: service_healthy
+      redis-green:
+        condition: service_healthy
+      backend-green:
+        condition: service_healthy
+    networks:
+      - sentinelcv_green
+    restart: unless-stopped
+
+  # Next.js Frontend (Green)
+  frontend-green:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.sentinelcv.com}
+        NEXT_PUBLIC_ENVIRONMENT: ${NEXT_PUBLIC_ENVIRONMENT:-production}
+    container_name: sentinelcv_frontend_green
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.sentinelcv.com}
+      NEXT_PUBLIC_WEBSOCKET_URL: ${NEXT_PUBLIC_WEBSOCKET_URL:-wss://api.sentinelcv.com}
+      NEXT_PUBLIC_ENVIRONMENT: ${NEXT_PUBLIC_ENVIRONMENT:-production}
+    ports:
+      - "3002:3000"  # Different port from blue (3001)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sentinelcv_green
+    restart: unless-stopped
+
+  # AI Services (Green)
+  ai-service-green:
+    build:
+      context: ./ai_services
+      dockerfile: Dockerfile
+    container_name: sentinelcv_ai_service_green
+    environment:
+      SENTINELCV_ENV: ${SENTINELCV_ENV:-production}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DEBUG: ${DEBUG:-false}
+      
+      # Database
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-changeme}@postgres-green:5432/${DB_NAME:-sentinelcv}
+      
+      # Models
+      YOLO_MODEL_PATH: ${YOLO_MODEL_PATH:-/models/yolov8n.pt}
+      YOLO_CONFIDENCE_THRESHOLD: ${YOLO_CONFIDENCE_THRESHOLD:-0.5}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-32}
+      LIVENESS_CONFIDENCE_THRESHOLD: ${LIVENESS_CONFIDENCE_THRESHOLD:-0.65}
+      
+      # GPU
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-changeme_internal_service_key}
+
+      # Refuse the weak 32x32-grayscale fallback embedding when no real
+      # ArcFace/AdaFace backend is loadable — never allow it into production.
+      SENTINELCV_STRICT_RECOGNITION: ${SENTINELCV_STRICT_RECOGNITION:-1}
+    depends_on:
+      postgres-green:
+        condition: service_healthy
+    volumes:
+      - ./ai_services:/app
+      - ./data/face_images:/app/data/face_images
+      - ./data/models:/models
+      - ./logs:/app/logs
+    ports:
+      - "8002:8001"  # Different port from blue (8001)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sentinelcv_green
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Nginx Reverse Proxy (Green)
+  nginx-green:
+    image: nginx:alpine
+    container_name: sentinelcv_nginx_green
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./certs/cert.pem:/etc/nginx/certs/cert.pem:ro
+      - ./certs/key.pem:/etc/nginx/certs/key.pem:ro
+    depends_on:
+      - backend-green
+      - frontend-green
+    ports:
+      - "5443:443"  # Different HTTPS port from blue (443)
+      - "5080:80"   # Different HTTP port from blue (80)
+    networks:
+      - sentinelcv_green
+    restart: unless-stopped
+
+volumes:
+  postgres_green_data:
+    driver: local
+  redis_green_data:
+    driver: local
+
+networks:
+  sentinelcv_green:
+    driver: bridge

@@ -1,0 +1,82 @@
+groups:
+  - name: sentinelcv-db-cache-alerts
+    rules:
+      - alert: SentinelCVDBPoolUtilizationHigh
+        expr: sentinelcv_backend_db_pool_utilization > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "DB pool utilization high"
+          description: "DB pool utilization is above 80% for 5 minutes."
+
+      - alert: SentinelCVDBPoolUtilizationCritical
+        expr: sentinelcv_backend_db_pool_utilization > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "DB pool utilization critical"
+          description: "DB pool utilization is above 95% for 2 minutes."
+
+      - alert: SentinelCVDBConnectionUtilizationHigh
+        expr: sentinelcv_backend_db_connection_utilization > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "DB connection utilization high"
+          description: "DB connection utilization is above 80% for 5 minutes."
+
+      - alert: SentinelCVDBConnectionUtilizationCritical
+        expr: sentinelcv_backend_db_connection_utilization > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "DB connection utilization critical"
+          description: "DB connection utilization is above 95% for 2 minutes."
+
+      - alert: SentinelCVCacheHitRatioLow
+        expr: sentinelcv_backend_cache_hit_ratio < 0.7
+        for: 10m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Cache hit ratio low"
+          description: "Cache hit ratio is below 70% for 10 minutes."
+
+      - alert: SentinelCVCacheHitRatioCritical
+        expr: sentinelcv_backend_cache_hit_ratio < 0.5
+        for: 10m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "Cache hit ratio critical"
+          description: "Cache hit ratio is below 50% for 10 minutes."
+
+      - alert: SentinelCVSlowQueriesHigh
+        expr: sentinelcv_backend_db_slow_queries_total > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Slow queries detected"
+          description: "More than 10 slow queries over threshold in pg_stat_statements."
+
+      - alert: SentinelCVSlowQueriesCritical
+        expr: sentinelcv_backend_db_slow_queries_total > 25
+        for: 5m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "Slow queries critical"
+          description: "More than 25 slow queries over threshold in pg_stat_statements."

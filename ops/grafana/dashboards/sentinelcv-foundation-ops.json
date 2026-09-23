@@ -1,0 +1,127 @@
+{
+  "title": "SentinelCV Foundation Ops",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Backend Requests",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sentinelcv_backend_requests_total",
+          "legendFormat": "requests"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Behavior Events",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "expr": "sentinelcv_backend_behavior_events_total",
+          "legendFormat": "events"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Open Learning Signals",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sentinelcv_backend_open_learning_signals",
+          "legendFormat": "signals"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Cross-Camera Movements",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        {
+          "expr": "sentinelcv_backend_cross_camera_movements_total",
+          "legendFormat": "movements"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Backend And AI Request Volume",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "targets": [
+        {
+          "expr": "rate(sentinelcv_backend_requests_total[5m])",
+          "legendFormat": "backend"
+        },
+        {
+          "expr": "rate(sentinelcv_ai_requests_total[5m])",
+          "legendFormat": "ai"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Average Latency",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "targets": [
+        {
+          "expr": "sentinelcv_backend_request_latency_average_seconds",
+          "legendFormat": "backend"
+        },
+        {
+          "expr": "sentinelcv_ai_request_latency_average_seconds",
+          "legendFormat": "ai"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "DB Pool Utilization",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "targets": [
+        {
+          "expr": "sentinelcv_backend_db_pool_utilization",
+          "legendFormat": "pool utilization"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Cache Hit Ratio",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "targets": [
+        {
+          "expr": "sentinelcv_backend_cache_hit_ratio",
+          "legendFormat": "cache hit ratio"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "DB Connection Utilization",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "targets": [
+        {
+          "expr": "sentinelcv_backend_db_connection_utilization",
+          "legendFormat": "connection utilization"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Slow Queries (pg_stat_statements)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "targets": [
+        {
+          "expr": "sentinelcv_backend_db_slow_queries_total",
+          "legendFormat": "slow queries"
+        }
+      ]
+    }
+  ]
+}

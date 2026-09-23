@@ -1,0 +1,343 @@
+services:
+  # ─── PostgreSQL Database ─────────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: sentinelcv-db-prod
+    environment:
+      POSTGRES_USER: sentinelcv
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: sentinelcv_prod
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - pg_stat_statements.max=10000
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_pgvector.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinelcv"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    networks:
+      - sentinelcv-network
+
+  # ─── Redis Cache ────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: sentinelcv-redis-prod
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+    networks:
+      - sentinelcv-network
+
+  # ─── Backend API ─────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --workers 4 --bind 0.0.0.0:8000
+    environment:
+      SENTINELCV_ENV: ${SENTINELCV_ENV:-production}
+      DATABASE_URL: postgresql://sentinelcv:${DB_PASSWORD:?DB_PASSWORD must be set}@postgres:5432/sentinelcv_prod
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+      DB_POOL_RECYCLE: ${DB_POOL_RECYCLE:-3600}
+      DB_POOL_PRE_PING: ${DB_POOL_PRE_PING:-true}
+      DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT:-30}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379/0
+      VIDEO_JOB_QUEUE_MODE: ${VIDEO_JOB_QUEUE_MODE:-redis}
+      SYNTHETIC_JOB_QUEUE_MODE: ${SYNTHETIC_JOB_QUEUE_MODE:-redis}
+      TEMPORAL_JOB_QUEUE_MODE: ${TEMPORAL_JOB_QUEUE_MODE:-redis}
+      AUTO_ENSURE_PGVECTOR_FACE_INDEX: ${AUTO_ENSURE_PGVECTOR_FACE_INDEX:-1}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      EMBEDDING_KEY_SECRET: ${EMBEDDING_KEY_SECRET:?EMBEDDING_KEY_SECRET must be set and distinct from SECRET_KEY}
+      METRICS_TOKEN: ${METRICS_TOKEN:?METRICS_TOKEN must be set to protect the /metrics endpoint}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY must be set}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?ALLOWED_HOSTS must be set (comma-separated, no wildcards in production)}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL must be set}
+      FACE_CONFIDENCE_THRESHOLD: 0.65
+      AI_SERVICE_URL: http://ai-service:8001
+      PGVECTOR_INDEX_TYPE: ${PGVECTOR_INDEX_TYPE:-hnsw}
+      PGVECTOR_IVFFLAT_PROBES: ${PGVECTOR_IVFFLAT_PROBES:-10}
+      PGVECTOR_HNSW_EF_SEARCH: ${PGVECTOR_HNSW_EF_SEARCH:-64}
+      PGVECTOR_CANDIDATE_LIMIT: ${PGVECTOR_CANDIDATE_LIMIT:-300}
+      AUTO_INIT_DB: "0"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+      REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-sentinelcv_refresh_token}
+      REFRESH_COOKIE_DOMAIN: ${REFRESH_COOKIE_DOMAIN:-}
+      REFRESH_COOKIE_PATH: ${REFRESH_COOKIE_PATH:-/api/v1/auth}
+      REFRESH_COOKIE_SAMESITE: ${REFRESH_COOKIE_SAMESITE:-lax}
+      REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-true}
+      # ── Password reset email (SMTP) ────────────────────────────────────────
+      # Required for password-reset delivery. Leave SMTP_HOST empty to disable.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      PASSWORD_RESET_FROM_EMAIL: ${PASSWORD_RESET_FROM_EMAIL:-}
+      PASSWORD_RESET_URL: ${PASSWORD_RESET_URL:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      SMTP_USE_SSL: ${SMTP_USE_SSL:-false}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend_data:/app/data
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    networks:
+      - sentinelcv-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  queue-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sentinelcv-queue-worker-prod
+    command:
+      - python
+      - scripts/advanced_job_worker.py
+      - --job-type
+      - all
+      - --poll-interval
+      - "1"
+      - --pop-timeout
+      - "5"
+    environment:
+      SENTINELCV_ENV: ${SENTINELCV_ENV:-production}
+      DATABASE_URL: postgresql://sentinelcv:${DB_PASSWORD}@postgres:5432/sentinelcv_prod
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
+      AI_SERVICE_URL: http://ai-service:8001
+      VIDEO_JOB_QUEUE_MODE: ${VIDEO_JOB_QUEUE_MODE:-redis}
+      SYNTHETIC_JOB_QUEUE_MODE: ${SYNTHETIC_JOB_QUEUE_MODE:-redis}
+      TEMPORAL_JOB_QUEUE_MODE: ${TEMPORAL_JOB_QUEUE_MODE:-redis}
+      AUTO_ENSURE_PGVECTOR_FACE_INDEX: ${AUTO_ENSURE_PGVECTOR_FACE_INDEX:-1}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    volumes:
+      - backend_data:/app/data
+    restart: unless-stopped
+    networks:
+      - sentinelcv-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Frontend (Next.js) ─────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+      NEXT_PUBLIC_WEBSOCKET_URL: ${NEXT_PUBLIC_WEBSOCKET_URL:-}
+      NEXT_PUBLIC_ENVIRONMENT: production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+    networks:
+      - sentinelcv-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── AI Processing Service ─────────────────────────────────────────────────
+  ai-service:
+    build:
+      context: ./ai_services
+      dockerfile: Dockerfile
+    container_name: sentinelcv-ai-prod
+    environment:
+      SENTINELCV_ENV: ${SENTINELCV_ENV:-production}
+      API_BASE_URL: http://backend:8000/api/v1
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY must be set}
+      FACE_IMAGE_DIR: /app/data/face_images
+      # Refuse the weak 32x32-grayscale fallback embedding when no real
+      # ArcFace/AdaFace backend is loadable — never allow it into production.
+      SENTINELCV_STRICT_RECOGNITION: ${SENTINELCV_STRICT_RECOGNITION:-1}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - backend_data:/app/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - sentinelcv-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Nginx Reverse Proxy ────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: sentinelcv-nginx-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+    networks:
+      - sentinelcv-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Prometheus Metrics ──────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: sentinelcv-prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./alerts:/etc/prometheus/alerts:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+    networks:
+      - sentinelcv-network
+
+  # ─── Grafana Dashboards ────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: sentinelcv-grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - ./ops/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - sentinelcv-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  backend_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  sentinelcv-network:
+    driver: bridge

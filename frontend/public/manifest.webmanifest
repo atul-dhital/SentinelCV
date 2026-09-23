@@ -1,0 +1,40 @@
+{
+  "name": "SentinelCV - Visitor Tracking",
+  "short_name": "SentinelCV",
+  "description": "AI-powered visitor tracking and face recognition system",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#0f172a",
+  "orientation": "any",
+  "categories": ["security", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Live Activities",
+      "short_name": "Live",
+      "url": "/live-activities",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Visitor Logs",
+      "short_name": "Logs",
+      "url": "/logs",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

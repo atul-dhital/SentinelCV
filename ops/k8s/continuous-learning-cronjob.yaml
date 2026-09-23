@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sentinelcv-continuous-learning
+  namespace: sentinelcv
+spec:
+  schedule: "*/30 * * * *"
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: learning-queue-runner
+              image: curlimages/curl:8.9.1
+              env:
+                - name: BACKEND_BASE_URL
+                  value: http://sentinelcv-backend:8000/api/v1
+                - name: CONTINUAL_LEARNING_BEARER_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: sentinelcv-secrets
+                      key: CONTINUAL_LEARNING_BEARER_TOKEN
+                - name: ENABLE_INCREMENTAL_MODEL_UPDATE
+                  value: "false"
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -eu
+                  auth_header="Authorization: Bearer ${CONTINUAL_LEARNING_BEARER_TOKEN}"
+                  curl -fsS -X POST "${BACKEND_BASE_URL}/future-enhancements/continuous-learning/signals/queue" \
+                    -H "${auth_header}" \
+                    -H "Content-Type: application/json" \
+                    -d '{"max_samples":10,"min_priority":"medium","strategy":"anomaly_first"}'
+
+                  if [ "${ENABLE_INCREMENTAL_MODEL_UPDATE}" = "true" ]; then
+                    curl -fsS -X POST "${BACKEND_BASE_URL}/learning/update-model" \
+                      -H "${auth_header}" \
+                      -H "Content-Type: application/json" \
+                      -d '{"include_pending":true}'
+                  fi

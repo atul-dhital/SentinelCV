@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+/* ─── Custom Theme ─────────────────────────────────────────────────── */
+@theme {
+  --color-brand-50: #f5f3ff;
+  --color-brand-100: #ede9fe;
+  --color-brand-200: #ddd6fe;
+  --color-brand-300: #c4b5fd;
+  --color-brand-400: #a78bfa;
+  --color-brand-500: #8b5cf6;
+  --color-brand-600: #7c3aed;
+  --color-brand-700: #6d28d9;
+  --color-brand-800: #5b21b6;
+  --color-brand-900: #4c1d95;
+  --color-brand-950: #2e1065;
+}
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 8, 8, 12;
+  --background-end-rgb: 0, 0, 0;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  background: radial-gradient(
+      circle at top center,
+      rgba(124, 58, 237, 0.08),
+      transparent 40%
+    ),
+    linear-gradient(
+      to bottom,
+      rgb(var(--background-start-rgb)),
+      rgb(var(--background-end-rgb))
+    );
+  min-height: 100vh;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+@utility glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 
+              inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@utility glass-card-hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05),
+              inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+/* ─── Light Mode Overrides ─────────────────────────────────────────── */
+
+.light-mode {
+  --foreground-rgb: 15, 23, 42;
+  --background-start-rgb: 248, 250, 252;
+  --background-end-rgb: 241, 245, 249;
+}
+
+
+.light-mode body {
+  color: rgb(30, 30, 30);
+  background: rgb(245, 245, 250);
+}
+
+.light-mode .glass-card {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.light-mode nav {
+  background: rgba(255, 255, 255, 0.85) !important;
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-mode nav a,
+.light-mode nav button,
+.light-mode nav span {
+  color: #374151;
+}
+
+.light-mode nav a:hover,
+.light-mode nav button:hover {
+  color: #111827;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.light-mode nav a.text-brand-500,
+.light-mode nav .text-brand-500 {
+  color: #7c3aed !important;
+}
+
+.light-mode .text-white {
+  color: #111827;
+}
+
+/* Preserve white text on colored buttons/links in light mode */
+.light-mode button[class*="bg-brand"].text-white,
+.light-mode a[class*="bg-brand"].text-white,
+.light-mode button[class*="bg-brand"] .text-white,
+.light-mode a[class*="bg-brand"] .text-white,
+.light-mode [class*="bg-brand-5"] > .text-white,
+.light-mode [class*="bg-brand-6"] > .text-white,
+.light-mode [class*="bg-brand-7"] > .text-white {
+  color: #ffffff;
+}
+
+/* Gradient-clipped headings take their colour from the gradient stops rather than
+   from a text colour, so the `.light-mode .text-white` rule above cannot reach them.
+   Page heroes use white-based stops, which leaves them invisible on the light
+   background. Re-point those stops at the light-mode foreground, keeping the same
+   fade. Brand-coloured gradients (e.g. the sign-in hero) sit on dark panels in both
+   themes and are deliberately excluded. */
+.light-mode .bg-clip-text.text-transparent:not([class*="from-brand"]) {
+  background-image: linear-gradient(
+    to bottom,
+    #111827 0%,
+    #111827 62%,
+    rgba(17, 24, 39, 0.62) 100%
+  );
+}
+
+.light-mode [class*="bg-gradient-to-r"].bg-clip-text.text-transparent:not([class*="from-brand"]) {
+  background-image: linear-gradient(to right, #111827 0%, #4b5563 100%);
+}
+
+.light-mode .text-gray-400,
+.light-mode .text-gray-300 {
+  color: #4b5563;
+}
+
+.light-mode .text-gray-500 {
+  color: #6b7280;
+}
+
+.light-mode .bg-gray-800,
+.light-mode .bg-gray-900 {
+  background-color: #f3f4f6;
+}
+
+.light-mode .bg-gray-900\/50 {
+  background-color: rgba(243, 244, 246, 0.5);
+}
+
+.light-mode .border-gray-700,
+.light-mode .border-gray-800 {
+  border-color: #e5e7eb;
+}
+
+.light-mode .border-white\/5,
+.light-mode .border-white\/10 {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.light-mode input,
+.light-mode textarea,
+.light-mode select {
+  background-color: #fff !important;
+  border-color: #d1d5db !important;
+  color: #111827 !important;
+}
+
+.light-mode code {
+  background-color: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+/* Fix missing opacity and dark backgrounds in light mode */
+.light-mode [class*="text-white/"] {
+  color: #111827;
+}
+
+.light-mode .text-gray-100,
+.light-mode .text-gray-200 {
+  color: #374151;
+}
+
+.light-mode [class*="bg-black/"] {
+  background-color: rgba(243, 244, 246, 0.8) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+.light-mode [class*="bg-[#050505]"],
+.light-mode [class*="bg-[#0a0a0a]"],
+.light-mode [class*="bg-black"] {
+  background-color: #f8fafc;
+}
+
+.light-mode [class*="bg-white/"] {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+

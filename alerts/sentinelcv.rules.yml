@@ -1,0 +1,165 @@
+groups:
+  - name: sentinelcv_backend
+    interval: 30s
+    rules:
+
+      # ── Error rate ──────────────────────────────────────────────────────────
+      - alert: HighBackendErrorRate
+        expr: |
+          rate(sentinelcv_backend_errors_total[5m])
+          / rate(sentinelcv_backend_requests_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Backend error rate above 1%"
+          description: >
+            {{ $value | humanizePercentage }} of requests are failing over the
+            last 5 minutes. Check Sentry and backend logs.
+
+      - alert: CriticalBackendErrorRate
+        expr: |
+          rate(sentinelcv_backend_errors_total[5m])
+          / rate(sentinelcv_backend_requests_total[5m]) > 0.05
+        for: 1m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "Backend error rate above 5% — immediate action required"
+          description: >
+            {{ $value | humanizePercentage }} of requests failing. Likely a
+            deployment issue or database problem.
+
+      # ── Database connection pool ────────────────────────────────────────────
+      - alert: DBPoolUtilizationHigh
+        expr: sentinelcv_backend_db_pool_utilization > 0.85
+        for: 3m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Database connection pool utilization above 85%"
+          description: >
+            Pool utilization is {{ $value | humanizePercentage }}. Consider
+            increasing DB_POOL_SIZE or reducing query latency.
+
+      - alert: DBPoolUtilizationCritical
+        expr: sentinelcv_backend_db_pool_utilization > 0.95
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: >
+            Pool utilization at {{ $value | humanizePercentage }}. New requests
+            will queue and likely time out. Scale connections immediately.
+
+      # ── Redis ───────────────────────────────────────────────────────────────
+      - alert: RedisDisconnected
+        expr: sentinelcv_backend_redis_connected == 0
+        for: 1m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Backend is not connected to Redis"
+          description: >
+            Rate limiting, job queues, and realtime pub/sub are degraded.
+            Rate limits fall back to in-memory (per-worker only).
+
+      - alert: RedisFallbackActive
+        expr: sentinelcv_backend_redis_fallback == 1
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis fallback storage active for >5 minutes"
+          description: >
+            The backend is using in-memory fallback for Redis operations.
+            Rate limits and job queues are not durable across restarts.
+
+      # ── AI service health ───────────────────────────────────────────────────
+      - alert: AIServiceUnavailable
+        expr: up{job="sentinelcv-ai"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: ai
+        annotations:
+          summary: "AI service is unreachable"
+          description: >
+            The AI inference service has not responded to health checks for 2
+            minutes. Face recognition, liveness detection, and video processing
+            are unavailable.
+
+      # ── High request latency ────────────────────────────────────────────────
+      - alert: HighAPILatency
+        expr: sentinelcv_backend_request_latency_average_seconds > 2.0
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Average API response time above 2 seconds"
+          description: >
+            Mean latency is {{ $value }}s. Check for slow database queries
+            (pg_stat_statements), N+1 patterns, or Redis delays.
+
+      # ── Continuous learning signal backlog ──────────────────────────────────
+      - alert: LearningSignalBacklogHigh
+        expr: sentinelcv_backend_open_learning_signals > 500
+        for: 10m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: "Over 500 open continuous-learning signals"
+          description: >
+            {{ $value }} signals are waiting to be processed. Consider
+            triggering a retraining run or reviewing the signal priority queue.
+
+      # ── Database connection limit ────────────────────────────────────────────
+      - alert: DBConnectionsHigh
+        expr: sentinelcv_backend_db_connection_utilization > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "PostgreSQL connection utilization above 80%"
+          description: >
+            {{ $value | humanizePercentage }} of max_connections in use.
+            Consider enabling PgBouncer or increasing max_connections.
+
+  - name: sentinelcv_sla
+    interval: 60s
+    rules:
+
+      # ── Uptime ──────────────────────────────────────────────────────────────
+      - alert: BackendDown
+        expr: up{job="sentinelcv-backend"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "SentinelCV backend is DOWN"
+          description: >
+            The backend health endpoint is not responding. All dashboard users
+            are affected. Check container status immediately.
+
+      - alert: FrontendDown
+        expr: up{job="sentinelcv-frontend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: frontend
+        annotations:
+          summary: "SentinelCV frontend is DOWN"
+          description: >
+            The Next.js frontend is not serving requests. Users cannot access
+            the dashboard. Check container status.

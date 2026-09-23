@@ -1,0 +1,53 @@
+# Ruff config for the SentinelCV backend.
+# Mirrors the CI job in .github/workflows/ci.yml :: backend-lint.
+
+target-version = "py311"
+line-length = 120
+
+extend-exclude = [
+    ".venv",
+    "venv",
+    "alembic/versions",
+    "tests/test_runtime",
+    "scripts/legacy_*",
+    "__pycache__",
+    "*.pyc",
+]
+
+[lint]
+# Start permissive — only fail CI on errors that matter today. We can tighten
+# the rule set in follow-up sprints once existing violations are paid down.
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes (undefined names, unused imports, etc.)
+    "W",    # pycodestyle warnings
+    "I",    # isort (import order)
+    "B",    # flake8-bugbear (likely bugs)
+    "S",    # flake8-bandit (security)
+    "PIE",  # flake8-pie
+    "UP",   # pyupgrade
+]
+ignore = [
+    "E501",   # line too long — line-length governs this; Ruff will still flag truly egregious lines
+    "B008",   # FastAPI Depends() in defaults is the framework idiom
+    "S101",   # asserts in tests are fine
+    "S104",   # 0.0.0.0 binding is intended for containers
+    "S105",   # password-looking strings flagged falsely on env-var names
+    "S106",   # same — string literals named "password" in tests
+    "S311",   # random for non-crypto purposes (synthetic embedding fallback)
+    "S603",   # subprocess without shell=True is the safer form anyway
+    "S607",   # subprocess partial path — operator-controlled deployment scripts
+    "UP007",  # PEP 604 unions (X | Y) — repo currently mixes; defer until full sweep
+]
+
+[lint.per-file-ignores]
+"tests/**/*" = ["S", "B"]  # tests use lots of bandit/bugbear-flagged patterns intentionally
+"scripts/**/*" = ["S603", "S607"]
+"alembic/env.py" = ["E402"]
+
+[lint.isort]
+known-first-party = ["api", "core", "db", "models", "schemas", "services"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

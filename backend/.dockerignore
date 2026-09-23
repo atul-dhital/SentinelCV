@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Tests and dev fixtures
+tests/
+test_runtime/
+test_sentinelcv.db
+test_sentinel.db
+test_future_enhancements.db
+test_output.txt
+
+# SQLite databases (dev only — never copy into image)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs and process artifacts
+*.log
+*.out
+*.err
+backend.log
+acceptance-*.err
+acceptance-*.log
+acceptance-*.out
+runtime/probe-*/
+.temp/
+.tmp/
+
+# Secrets — never copy into image
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+ssl/
+
+# Local data and uploads — provided via volume mount
+data/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Documentation (kept out of runtime image)
+*.md
+DEPLOYMENT_CHECKLIST.md
+DEVELOPMENT_ENVIRONMENT_READY.md
+
+# Benchmarks
+benchmark_results.json

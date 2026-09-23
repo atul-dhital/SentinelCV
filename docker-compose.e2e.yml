@@ -1,0 +1,123 @@
+services:
+  # ── PostgreSQL for E2E tests ─────────────────────────────────────────────
+  postgres-e2e:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: sentinelcv
+      POSTGRES_PASSWORD: e2epass
+      POSTGRES_DB: sentinelcv_e2e
+    ports:
+      - "5433:5432"          # 5433 to avoid clashing with a running dev DB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinelcv"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    tmpfs:
+      - /var/lib/postgresql/data  # in-memory — fast and disposable after test run
+
+  # ── Backend for E2E tests ─────────────────────────────────────────────────
+  backend-e2e:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
+    environment:
+      SENTINELCV_ENV: development
+      DATABASE_URL: postgresql://sentinelcv:e2epass@postgres-e2e:5432/sentinelcv_e2e
+      SECRET_KEY: e2e-test-secret-key-32chars-min!!
+      EMBEDDING_KEY_SECRET: e2e-embedding-key-distinct-!!!!!!
+      INTERNAL_SERVICE_KEY: e2e-internal-key
+      METRICS_TOKEN: e2e-metrics-token
+      ALLOWED_HOSTS: "localhost,127.0.0.1,backend-e2e"
+      FRONTEND_URL: http://localhost:3001
+      ALLOWED_ORIGINS: http://localhost:3001
+      AUTO_INIT_DB: "1"         # bootstrap schema for fresh DB
+      ALLOW_SYNTHETIC_BIOMETRIC_FALLBACK: "1"
+      ALLOW_PRIVATE_RTSP_TARGETS: "1"
+      ALLOW_PRIVATE_WEBHOOK_TARGETS: "1"
+      AUTH_LOGIN_IP_LIMIT: "500"
+      AUTH_LOGIN_EMAIL_LIMIT: "500"
+      AUTH_FORGOT_PASSWORD_IP_LIMIT: "500"
+      AUTH_FORGOT_PASSWORD_EMAIL_LIMIT: "500"
+      STORAGE_ENCRYPTED: verified   # dev/test only
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres-e2e:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+
+  # ── Seed E2E users ────────────────────────────────────────────────────────
+  seed-e2e:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: >
+      python -c "
+      import os, time
+      os.environ.setdefault('SENTINELCV_ENV', 'development')
+      # Wait for backend to be healthy
+      import urllib.request
+      for _ in range(30):
+          try:
+              urllib.request.urlopen('http://backend-e2e:8000/health', timeout=2)
+              break
+          except Exception:
+              time.sleep(1)
+      from db.base import SessionLocal
+      from models.models import Organization, User
+      from core.security import hash_password
+      db = SessionLocal()
+      try:
+          if not db.query(User).filter(User.email == 'admin@test.com').first():
+              org = Organization(name='E2E Org')
+              db.add(org); db.flush()
+              db.add(User(organization_id=org.id, email='admin@test.com',
+                          full_name='E2E Admin', password_hash=hash_password('Admin123!'),
+                          role='admin'))
+              db.add(User(organization_id=org.id, email='staff@test.com',
+                          full_name='E2E Staff', password_hash=hash_password('Staff123!'),
+                          role='staff'))
+              db.commit()
+              print('E2E users seeded')
+          else:
+              print('E2E users already exist')
+      finally:
+          db.close()
+      "
+    environment:
+      DATABASE_URL: postgresql://sentinelcv:e2epass@postgres-e2e:5432/sentinelcv_e2e
+      SECRET_KEY: e2e-test-secret-key-32chars-min!!
+      EMBEDDING_KEY_SECRET: e2e-embedding-key-distinct-!!!!!!
+      SENTINELCV_ENV: development
+    depends_on:
+      backend-e2e:
+        condition: service_healthy
+
+  # ── Frontend for E2E tests ────────────────────────────────────────────────
+  frontend-e2e:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+      NODE_ENV: production
+    ports:
+      - "3001:3000"
+    depends_on:
+      seed-e2e:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s

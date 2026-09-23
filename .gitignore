@@ -1,0 +1,88 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+env/
+.venv/
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Node
+node_modules/
+.next/
+.next-runtime/
+out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# AI Development Tools
+.claude/
+graphify-out/
+
+# Data directories
+data/
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+archive.zip
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+
+# SQLite databases (dev + test fixtures)
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TLS certificates and private keys — never commit these
+ssl/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Logs
+*.log
+*.out
+*.err
+/backend/.temp/
+/backend/.tmp/
+/backend/.test_runtime/
+/backend/test_runtime/
+/backend/runtime/probe-*/
+app.js
+
+# Test / coverage / benchmark / audit run artifacts (regenerable)
+.coverage
+.coverage.*
+htmlcov/
+test-results/
+frontend/test-results/
+*.db.bak
+test_output.txt
+benchmark_results.json
+audit_results_*.json
