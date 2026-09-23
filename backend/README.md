@@ -52,8 +52,6 @@ Open:
 - **Frontend contract:** `frontend/src/services/api.ts` is the canonical client contract; helper service files coexist with the facade.
 - **Performance Tests**: Infrastructure for memory profiling and latency testing in `scripts/performance_test.py`.
 
-See `OPTIMIZATION_SUMMARY.md` and `FINAL_AUDIT_REPORT.md` for detailed metrics and verification.
-
 ## Queue Mode
 
 Enable durable queue processing with Redis:
