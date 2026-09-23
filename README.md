@@ -4,8 +4,13 @@ SentinelCV is a multi-tenant visitor-tracking and facial-recognition platform: a
 
 > This is the curated public snapshot of the project (single squashed commit, no development history). Internal planning docs and CI artifacts from the private working repo are not included here.
 
+> Screenshots below are from a real local run of the app. Enrolled-visitor photos and any name/email/phone data have been blurred/redacted — the underlying dev database has real test enrollees that shouldn't be published.
+
+![Login](assets/screenshots/login.png)
+
 ## Contents
 
+- [Screenshots](#screenshots)
 - [Architecture](#architecture)
 - [Core features](#core-features)
 - [Experimental / Phase 3 modules](#experimental--phase-3-modules)
@@ -16,6 +21,36 @@ SentinelCV is a multi-tenant visitor-tracking and facial-recognition platform: a
 - [Security model](#security-model)
 - [Observability](#observability)
 - [Repository structure](#repository-structure)
+
+## Screenshots
+
+**Operator dashboard** — live identification/detection metrics, real-time stream, and quick actions.
+
+![Dashboard](assets/screenshots/dashboard.png)
+
+**Visitor directory** — enrolled visitors with face-count, contact info, and known/unknown status.
+
+![Visitors](assets/screenshots/visitors.png)
+
+**Detection logs** — every recognition event, filterable by status and date, paginated across 1,200+ entries.
+
+![Detection logs](assets/screenshots/detection-logs.png)
+
+**Liveness verification** — blink, head-turn, and smile anti-spoofing challenges, with the privacy guarantees shown to the operator.
+
+![Liveness verification](assets/screenshots/liveness.png)
+
+**Alert rules** — configurable trigger conditions, confidence thresholds, and delivery channels (email/webhook).
+
+![Alerts](assets/screenshots/alerts.png)
+
+**Analytics** — identification rate, event breakdown, and system health at a glance.
+
+![Analytics](assets/screenshots/analytics.png)
+
+**Audit trail** — every auth/API action logged with timestamp, actor, and request metadata for compliance.
+
+![Audit logs](assets/screenshots/audit-logs.png)
 
 ## Architecture
 
